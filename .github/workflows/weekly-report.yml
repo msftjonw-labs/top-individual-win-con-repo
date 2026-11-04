@@ -1,0 +1,61 @@
+name: Weekly Windows container repository email
+
+on:
+  schedule:
+    - cron: '0 17 * * 1'
+  workflow_dispatch:
+    inputs:
+      send_email:
+        description: Send the report by email (requires mail variables and SMTP_PASSWORD secret)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-repository-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EMAIL_TO: ${{ vars.EMAIL_TO }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install report dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Test report generation
+        run: python -m unittest -v test_weekly_report.py
+      - name: Refresh rankings from GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python score_repos.py
+      - name: Generate PDF and email draft
+        env:
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+        run: python weekly_report.py
+      - name: Preserve report history
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-report-${{ github.run_id }}
+          path: |
+            report-history/
+            results.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Send email with PDF attachment
+        if: github.event_name == 'schedule' || inputs.send_email
+        env:
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_USERNAME: ${{ vars.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+        run: python weekly_report.py --send
