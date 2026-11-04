@@ -142,7 +142,7 @@ def send_email(message):
     missing = [key for key in required if not os.environ.get(key)]
     if missing:
         raise ValueError("Missing email configuration: " + ", ".join(missing))
-    with smtplib.SMTP(os.environ["SMTP_HOST"], int(os.environ.get("SMTP_PORT", "587")), timeout=60) as client:
+    with smtplib.SMTP(os.environ["SMTP_HOST"].strip().rstrip(",;"), int(os.environ.get("SMTP_PORT", "587")), timeout=60) as client:
         client.starttls(context=ssl.create_default_context())
         client.login(os.environ["SMTP_USERNAME"], os.environ["SMTP_PASSWORD"])
         client.send_message(message)
