@@ -78,7 +78,7 @@ def generate_pdf(entries, output, report_date):
     def c(text, style=cell):
         return Paragraph(text, style)
 
-    rows = [[c(h, head) for h in ("#", "Repository", "Score", "Problem solved", "Potential scenario",
+    rows = [[c(h, head) for h in ("#", "Repository", "URL", "Score", "Problem solved", "Potential scenario",
                                   "Tier / Stars / Forks", "Last PR / Merge", "Latest discussion")]]
     for rank, repo in enumerate(entries, 1):
         problem, scenario = summaries(repo)
@@ -94,7 +94,8 @@ def generate_pdf(entries, output, report_date):
             discussion += f'<br/><link href="{comment_url}">Source</link>'
         rows.append([
             c(str(rank)),
-            c(f'{html.escape(repo["repo"])}<br/><link href="{url}">{url}</link>'),
+            c(html.escape(repo["repo"])),
+            c(f'<link href="{url}">{url}</link>'),
             c(f"{repo['score']:.2f}/100"),
             c(html.escape(problem)),
             c(html.escape(scenario)),
@@ -102,7 +103,7 @@ def generate_pdf(entries, output, report_date):
             c(f"{html.escape(str(repo.get('last_pr', '-')))}<br/>{html.escape(str(repo.get('last_merge', '-')))}"),
             c(discussion),
         ])
-    table = Table(rows, repeatRows=1, colWidths=[18, 95, 38, 120, 120, 55, 60, 122])
+    table = Table(rows, repeatRows=1, colWidths=[18, 75, 90, 38, 112, 112, 55, 60, 122])
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#185b48")),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
