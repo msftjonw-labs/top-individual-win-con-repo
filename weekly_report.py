@@ -13,9 +13,10 @@ from email.policy import SMTP
 from pathlib import Path
 
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 ROOT = Path(__file__).resolve().parent
 PST = timezone(timedelta(hours=-8), name="PST")
@@ -71,28 +72,45 @@ def generate_pdf(entries, output, report_date):
     )
     if len(entries) < 10:
         paragraph(f"Only {len(entries)} qualifying repositories were available; no extra entries were invented.")
+    cell = ParagraphStyle("cell", parent=styles["BodyText"], fontSize=7, leading=9, spaceAfter=0)
+    head = ParagraphStyle("head", parent=cell, textColor=colors.white, fontName="Helvetica-Bold")
+
+    def c(text, style=cell):
+        return Paragraph(text, style)
+
+    rows = [[c(h, head) for h in ("#", "Repository", "Score", "Problem solved", "Potential scenario",
+                                  "Tier / Stars / Forks", "Last PR / Merge", "Latest discussion")]]
     for rank, repo in enumerate(entries, 1):
         problem, scenario = summaries(repo)
-        paragraph(f"{rank}. {html.escape(repo['repo'])} | Score: {repo['score']:.2f}/100", "Heading2")
         url = html.escape(repo["url"], quote=True)
-        paragraph(f'<link href="{url}">{url}</link>')
-        paragraph(f"<b>Problem solved:</b> {html.escape(problem)}")
-        paragraph(f"<b>Potential scenario:</b> {html.escape(scenario)}")
-        paragraph(
-            f"Tier: {html.escape(str(repo.get('tier', '-')))} | Stars: {repo.get('stars', 0)} | "
-            f"Forks: {repo.get('forks', 0)} | Last PR: {html.escape(str(repo.get('last_pr', '-')))} | "
-            f"Last merge: {html.escape(str(repo.get('last_merge', '-')))}"
-        )
-        paragraph(
-            f"Latest discussion: {html.escape(str(repo.get('last_comment', '-')))} | "
-            f"Semantic classification: {html.escape(str(repo.get('comment_semantics', 'none')))}"
+        discussion = (
+            f"{html.escape(str(repo.get('last_comment', '-')))}<br/>"
+            f"{html.escape(str(repo.get('comment_semantics', 'none')))}"
         )
         if repo.get("last_comment_excerpt"):
-            paragraph("Discussion excerpt: " + html.escape(repo["last_comment_excerpt"]))
+            discussion += "<br/>" + html.escape(repo["last_comment_excerpt"])
         if repo.get("last_comment_url"):
             comment_url = html.escape(repo["last_comment_url"], quote=True)
-            paragraph(f'<link href="{comment_url}">Discussion source</link>')
-        story.append(Spacer(1, 0.12 * inch))
+            discussion += f'<br/><link href="{comment_url}">Source</link>'
+        rows.append([
+            c(str(rank)),
+            c(f'{html.escape(repo["repo"])}<br/><link href="{url}">{url}</link>'),
+            c(f"{repo['score']:.2f}/100"),
+            c(html.escape(problem)),
+            c(html.escape(scenario)),
+            c(f"{html.escape(str(repo.get('tier', '-')))} / {repo.get('stars', 0)} / {repo.get('forks', 0)}"),
+            c(f"{html.escape(str(repo.get('last_pr', '-')))}<br/>{html.escape(str(repo.get('last_merge', '-')))}"),
+            c(discussion),
+        ])
+    table = Table(rows, repeatRows=1, colWidths=[18, 95, 38, 120, 120, 55, 60, 122])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#185b48")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#eef5f2")]),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 0.15 * inch))
     paragraph("Scoring and limitations", "Heading2")
     paragraph(
         "Weights: stars 15%, forks 10%, clones 10%, latest discussion 15%, latest PR 10%, "
@@ -107,7 +125,7 @@ def generate_pdf(entries, output, report_date):
         "misclassify non-English text. User ownership does not establish employer independence."
     )
     output.parent.mkdir(parents=True, exist_ok=True)
-    SimpleDocTemplate(str(output), rightMargin=42, leftMargin=42, topMargin=42, bottomMargin=42).build(story)
+    SimpleDocTemplate(str(output), pagesize=landscape(letter), rightMargin=42, leftMargin=42, topMargin=42, bottomMargin=42).build(story)
 
 
 def build_email(entries, pdf, report_date, sender, recipient):
