@@ -8,10 +8,10 @@ on:
       send_email:
         description: Send the report by email (requires mail variables and SMTP_PASSWORD secret)
         type: boolean
-        default: false
+        default: true
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: weekly-repository-report
@@ -25,6 +25,8 @@ jobs:
       EMAIL_TO: ${{ vars.EMAIL_TO }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -50,6 +52,17 @@ jobs:
             results.json
           if-no-files-found: error
           retention-days: 90
+      - name: Commit PDF reports to repository history
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- 'report-history/*.pdf'
+          if ! git diff --cached --quiet; then
+            git commit -m "Archive weekly table-format PDF report"
+            git push origin "HEAD:${DEFAULT_BRANCH}"
+          fi
       - name: Send email with PDF attachment
         if: github.event_name == 'schedule' || inputs.send_email
         env:

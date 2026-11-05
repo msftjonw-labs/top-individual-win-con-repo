@@ -39,12 +39,18 @@ settings are read from Variables:
 
 Only STARTTLS SMTP is supported; implicit TLS on port 465 is not supported.
 For a local send, set the same environment variables and run `python weekly_report.py --send`.
-Manual workflow runs generate a draft without sending unless `send_email` is selected.
+Manual workflow runs send email by default; deselect `send_email` to generate and archive
+the report without sending.
 Scheduled runs refresh the rolling 30-day rankings and send the generated PDF.
 
-Each run saves PDFs in its root `report-history` directory and uploads that directory
-and the ranking JSON as a downloadable Actions artifact retained for 90 days. Runner
-files are ephemeral; reports are not automatically committed to repository history.
+Each run generates the table-format PDF and commits it to `report-history` on the
+default branch before sending email, so an email delivery failure does not remove
+the archived report. Runs on the same PST date update that date's PDF; earlier
+versions remain in Git history. The workflow needs permission to push to the default
+branch; branch protection or repository rules that block the Actions bot will fail
+the archive step and prevent email delivery.
+The report directory and ranking JSON are also uploaded as a downloadable Actions
+artifact retained for 90 days. Only PDFs are committed, not email drafts or ranking JSON.
 Email drafts contain the recipient and attachment, so treat artifacts as private mail data.
 Artifact visibility follows repository access; public repositories expose their reports.
 
